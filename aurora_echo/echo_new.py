@@ -110,7 +110,7 @@ def collect_instance_params(cluster_identifier: str, new_instance_name: str, eng
     return params
 
 
-def create_cluster_and_instance(cluster_params: dict, instance_params: dict, interactive: bool, cluster_parameter_group_name: str):
+def create_cluster_and_instance(cluster_params: dict, instance_params: dict, interactive: bool, cluster_parameter_group_name: str = None):
     click.echo('{} Cluster settings:'.format(log_prefix()))
     click.echo(json.dumps(cluster_params, indent=4, sort_keys=True))
     click.echo('\n{} Instance settings:'.format(log_prefix()))
@@ -127,7 +127,7 @@ def create_cluster_and_instance(cluster_params: dict, instance_params: dict, int
     instance_params['DBClusterIdentifier'] = cluster_identifier
 
     # If we need to modify the cluster parameter group, do so before deploying the instance so we don't have to bounce it
-    if cluster_parameter_group_name:
+    if cluster_parameter_group_name is not None:
         rds.modify_db_cluster(DBClusterIdentifier=cluster_identifier, ApplyImmediately=True, DBClusterParameterGroupName=cluster_parameter_group_name)
 
     response = rds.create_db_instance(**instance_params)
@@ -149,7 +149,7 @@ def create_cluster_and_instance(cluster_params: dict, instance_params: dict, int
 @click.option('--tag', '-t', multiple=True)
 @click.option('--minimum-age-hours', '-h', default=20)
 @click.option('--interactive', '-i', default=True, type=bool)
-@click.option('--cluster-parameter-group-name', '-cpg')
+@click.option('--cluster-parameter-group-name', '-cpg', default=None)
 def new(aws_account_number: str, region: str, cluster_snapshot_name: str, managed_name: str, db_subnet_group_name: str, db_instance_class: str,
         engine: str, availability_zone: str, vpc_security_group_id: list, tag: list, minimum_age_hours: int, interactive: bool, cluster_parameter_group_name: str):
     click.echo('{} Starting aurora-echo for {}'.format(log_prefix(), managed_name))
