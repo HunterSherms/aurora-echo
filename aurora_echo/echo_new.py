@@ -110,7 +110,7 @@ def collect_instance_params(cluster_identifier: str, new_instance_name: str, eng
     return params
 
 
-def create_cluster_and_instance(cluster_params: dict, instance_params: dict, interactive: bool):
+def create_cluster_and_instance(cluster_params: dict, instance_params: dict, interactive: bool, cluster_parameter_group_name: str):
     click.echo('{} Cluster settings:'.format(log_prefix()))
     click.echo(json.dumps(cluster_params, indent=4, sort_keys=True))
     click.echo('\n{} Instance settings:'.format(log_prefix()))
@@ -125,6 +125,11 @@ def create_cluster_and_instance(cluster_params: dict, instance_params: dict, int
     # don't assume the cluster name came back exactly the same; use the one we received from aws
     cluster_identifier = response['DBCluster']['DBClusterIdentifier']
     instance_params['DBClusterIdentifier'] = cluster_identifier
+
+    # If we need to modify the cluster parameter group, do so before deploying the instance so we don't have to bounce it
+    if cluster_parameter_group_name:
+        rds.modify_db_cluster(DBClusterIdentifier=cluster_identifier, ApplyImmediately=True, DBClusterParameterGroupName=cluster_parameter_group_name)
+
     response = rds.create_db_instance(**instance_params)
 
     click.echo('{} Success! Cluster and instance created.'.format(log_prefix()))
@@ -144,8 +149,9 @@ def create_cluster_and_instance(cluster_params: dict, instance_params: dict, int
 @click.option('--tag', '-t', multiple=True)
 @click.option('--minimum-age-hours', '-h', default=20)
 @click.option('--interactive', '-i', default=True, type=bool)
+@click.option('--cluster-parameter-group-name', '-cpg')
 def new(aws_account_number: str, region: str, cluster_snapshot_name: str, managed_name: str, db_subnet_group_name: str, db_instance_class: str,
-        engine: str, availability_zone: str, vpc_security_group_id: list, tag: list, minimum_age_hours: int, interactive: bool):
+        engine: str, availability_zone: str, vpc_security_group_id: list, tag: list, minimum_age_hours: int, interactive: bool, cluster_parameter_group_name: str):
     click.echo('{} Starting aurora-echo for {}'.format(log_prefix(), managed_name))
     util = EchoUtil(region, aws_account_number)
     if not util.instance_too_new(managed_name, minimum_age_hours):
@@ -162,7 +168,7 @@ def new(aws_account_number: str, region: str, cluster_snapshot_name: str, manage
             # collect parameters up front so we only have to prompt the user once
             cluster_params = collect_cluster_params(cluster_snapshot_identifier, restore_cluster_name, db_subnet_group_name, engine, vpc_security_group_id, tag_set)
             instance_params = collect_instance_params(restore_cluster_name, restore_cluster_name, engine, db_instance_class, availability_zone, tag_set)  # instance and cluster names are the same
-            create_cluster_and_instance(cluster_params, instance_params, interactive)
+            create_cluster_and_instance(cluster_params, instance_params, interactive, cluster_parameter_group_name)
         else:
             click.echo('{} No cluster snapshots found with name {}. Not proceeding.'.format(log_prefix(), cluster_snapshot_name))
     else:
