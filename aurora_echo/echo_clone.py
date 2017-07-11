@@ -100,7 +100,7 @@ def collect_instance_params(cluster_identifier: str, new_instance_name: str, eng
     return params
 
 
-def create_clone_cluster_and_instance(clone_params: dict, instance_params: dict, interactive: bool):
+def create_clone_cluster_and_instance(clone_params: dict, instance_params: dict, interactive: bool, iam_role_arn: str = None):
     click.echo('{} Clone settings:'.format(log_prefix()))
     click.echo(json.dumps(clone_params, indent=4, sort_keys=True))
 
@@ -114,6 +114,9 @@ def create_clone_cluster_and_instance(clone_params: dict, instance_params: dict,
     cluster_identifier = response['DBCluster']['DBClusterIdentifier']
     instance_params['DBClusterIdentifier'] = cluster_identifier
     response = rds.create_db_instance(**instance_params)
+
+    if iam_role_arn is not None:
+        rds.add_role_to_db_cluster(DBClusterIdentifier=cluster_identifier, RoleArn=iam_role_arn)
 
     click.echo('{} Success! Clone and instance created.'.format(log_prefix()))
     click.echo(json.dumps(response, indent=4, sort_keys=True))
@@ -132,8 +135,9 @@ def create_clone_cluster_and_instance(clone_params: dict, instance_params: dict,
 @click.option('--tag', '-t', multiple=True)
 @click.option('--minimum-age-hours', '-h', default=20)
 @click.option('--interactive', '-i', default=True, type=bool)
+@click.option('--iam-role-arn', '-iam', default=None)
 def clone(aws_account_number: str, region: str, source_cluster_name: str, managed_name: str, db_subnet_group_name: str, db_instance_class: str,
-        engine: str, availability_zone: str, vpc_security_group_id: list, tag: list, minimum_age_hours: int, interactive: bool):
+        engine: str, availability_zone: str, vpc_security_group_id: list, tag: list, minimum_age_hours: int, interactive: bool, iam_role_arn: str):
     click.echo('{} Starting aurora-echo for {}'.format(log_prefix(), managed_name))
     util = EchoUtil(region, aws_account_number)
     if not util.instance_too_new(managed_name, minimum_age_hours):
@@ -148,7 +152,7 @@ def clone(aws_account_number: str, region: str, source_cluster_name: str, manage
         # collect parameters up front so we only have to prompt the user once
         cluster_params = collect_clone_params(source_cluster_name, restore_cluster_name, db_subnet_group_name, vpc_security_group_id, tag_set)
         instance_params = collect_instance_params(restore_cluster_name, restore_cluster_name, engine, db_instance_class, availability_zone, tag_set)  # instance and cluster names are the same
-        create_clone_cluster_and_instance(cluster_params, instance_params, interactive)
+        create_clone_cluster_and_instance(cluster_params, instance_params, interactive, iam_role_arn)
 
     else:
         click.echo('{} Found managed instance created less than {} hours ago. Not proceeding.'.format(log_prefix(), minimum_age_hours))
